@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from refergaussian.dataset_contract import dynerf_time_values
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -67,7 +68,10 @@ def _resolve_dynerf_all_images(dataset_dir: Path) -> list[dict[str, Any]]:
     image_paths = sorted(image_dir.glob("*.png"))
     if not image_paths:
         raise FileNotFoundError(f"No PNG frames found under {image_dir}")
-    denom = max(len(image_paths) - 1, 1)
+    time_values = dynerf_time_values(len(image_paths))
+    expected = [f"{i:04d}" for i in range(len(image_paths))]
+    if [p.stem for p in image_paths] != expected:
+        raise ValueError("DyNeRF frames must be contiguous, starting at 0000.png")
     entries: list[dict[str, Any]] = []
     for frame_index, image_path in enumerate(image_paths):
         entries.append(
@@ -75,7 +79,7 @@ def _resolve_dynerf_all_images(dataset_dir: Path) -> list[dict[str, Any]]:
                 "frame_index": int(frame_index),
                 "image_id": str(image_path.stem),
                 "image_path": str(image_path),
-                "time_value": float(frame_index) / float(denom),
+                "time_value": float(time_values[frame_index]),
                 "dataset_type": "dynerf",
                 "camera_name": str(camera_dir.name),
             }

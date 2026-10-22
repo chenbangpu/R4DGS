@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from refergaussian.run_identity import validate_query_ready_4dgs_run
+from refergaussian.dataset_contract import validate_dynerf_layout, writable_path
 
 
 def _default_data_root() -> Path:
@@ -117,6 +118,15 @@ def main() -> int:
         parser.error(f"4DGS config does not exist: {config}")
     if not args.dry_run and not source.is_dir():
         parser.error(f"scene directory does not exist: {source}")
+
+    if not args.dry_run:
+        # Upstream data loaders can write into source_path even during render.
+        writable_path(source)
+        writable_path(output)
+        if args.dataset == "dynerf":
+            errors = validate_dynerf_layout(source)
+            if errors:
+                parser.error("\n".join(errors))
 
     if not args.render_only and not args.dry_run and output.exists():
         errors = validate_query_ready_4dgs_run(output)

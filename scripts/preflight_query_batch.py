@@ -22,6 +22,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from refergaussian.run_identity import validate_query_ready_4dgs_run
+from refergaussian.dataset_contract import validate_dynerf_layout, writable_path
 from run_query_batch import resolve_profile, validate_release_manifest
 
 
@@ -87,14 +88,17 @@ def _visible_gpu_count() -> tuple[int | None, str]:
 
 def _is_writable_dir(path: Path, *, create: bool) -> bool:
     try:
+        path = writable_path(path)
         if create:
             path.mkdir(parents=True, exist_ok=True)
         probe_dir = path if path.exists() else path.parent
         probe_dir.mkdir(parents=True, exist_ok=True)
-        probe = probe_dir / ".refergaussian_preflight_write_test"
-        probe.write_text("ok\n", encoding="utf-8")
-        probe.unlink()
-    except OSError:
+        # A unique probe avoids overwriting an existing file or following a
+        # pre-existing symlink into a read-only data source.
+        import tempfile
+        with tempfile.TemporaryFile(dir=probe_dir) as probe:
+            probe.write(b"ok\n")
+    except (OSError, ValueError):
         return False
     return True
 
@@ -138,12 +142,8 @@ def _check_rows(
         if not _is_writable_dir(output_root, create=create_output_root):
             errors.append(f"{query_id}: output_root is not writable: {output_root}")
 
-        dataset_text = str(dataset_dir).lower()
-        scene_text = str(row.get("scene") or "").lower()
-        if check_camera and ("dynerf" in dataset_text or "coffee_martini" in scene_text):
-            camera0 = dataset_dir / "camera" / "0000.json"
-            if not camera0.is_file():
-                errors.append(f"{query_id}: missing required DyNeRF camera file: {camera0}")
+        if check_camera and (dataset_dir / "poses_bounds.npy").is_file():
+            errors.extend(f"{query_id}: {error}" for error in validate_dynerf_layout(dataset_dir))
 
         query_text = str(row.get("query") or "").strip()
         if not query_text:

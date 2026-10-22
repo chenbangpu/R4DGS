@@ -13,6 +13,8 @@ from typing import Any
 import imageio.v3 as iio
 import imageio.v2 as iio_v2
 import numpy as np
+from refergaussian.dataset_contract import dynerf_time_values
+from refergaussian.prediction_contract import RENDERER_CONTRACT
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .source_images import resolve_dataset_image_entries
@@ -371,6 +373,10 @@ def _fusion_options_for_profile(eval_profile: str) -> dict[str, Any]:
 
 def _apply_render_profile_env_defaults(eval_profile: str) -> None:
     normalized = _resolve_eval_profile(eval_profile)
+    if _is_formal_boundary_gated_profile(normalized):
+        from .render_profile import apply_formal_render_settings
+        apply_formal_render_settings(normalized)
+        return
     if normalized not in {"boundary_refine_v1", "public_boundary_v1", "mask_boundary_refine",
                           "boundary_shape_v2", "mask_shape_refine_v2",
                           "public_time_shape_v3", "mask_coverage_refine_v3",
@@ -619,8 +625,8 @@ def _dynerf_test_ids_from_renders(render_dir: Path) -> tuple[list[str], np.ndarr
     n = len(render_files)
     if n == 0:
         raise FileNotFoundError(f"No rendered frames found in {render_dir}")
-    test_ids = [f.stem for f in render_files]  # e.g. "00000", "00001", ...
-    time_values = np.linspace(0.0, 1.0, num=n, dtype=np.float32)
+    test_ids = [f"{i:04d}" for i in range(n)]  # source camera IDs
+    time_values = dynerf_time_values(n)
     return test_ids, time_values
 
 
@@ -741,6 +747,7 @@ def _query_track_match_for_time(
     time_value: float,
     tolerance: float = 0.012,
     strict: bool = False,
+    image_id: str | None = None,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     meta: dict[str, Any] = {
         "stage1_track_available": bool(track is not None and bool(getattr(track, "frames", []))),
@@ -764,7 +771,14 @@ def _query_track_match_for_time(
         if diffs.size:
             adaptive_tolerance = max(adaptive_tolerance, float(np.median(diffs)) * 0.65)
     allowed_delta = adaptive_tolerance * fallback_scale
-    best = min(track.frames, key=lambda frame: abs(float(frame.get("time_value", 0.0)) - float(time_value)))
+    candidates = track.frames
+    if image_id is not None:
+        candidates = [frame for frame in candidates if str(frame.get("image_id")) == str(image_id)]
+        if not candidates:
+            meta["stage1_match_mode"] = "missing_exact_camera_frame"
+            return None, meta
+        allowed_delta = 1.0e-6
+    best = min(candidates, key=lambda frame: abs(float(frame.get("time_value", 0.0)) - float(time_value)))
     best_time = float(best.get("time_value", 0.0))
     time_delta = abs(best_time - float(time_value))
     meta.update(
@@ -1424,8 +1438,11 @@ def _load_entity_clouds(run_dir: Path, selected_items: list[dict[str, Any]]) -> 
         trajectory_payload,
         gaussian_count=int(trajectories.shape[0]),
     )
-    require_renderer_geometry = _env_flag("QUERY_REQUIRE_RENDERER_GEOMETRY", False)
-    renderer_geometry = load_renderer_geometry_cache(entitybank_dir / "renderer_geometry")
+    # Standard final rendering evaluates the full checkpoint directly; it does
+    # not consume the selected-only geometry cache used by legacy projections.
+    standard_final = os.environ.get("GS_QUERY_CLOUD_RENDER_MODE") == "standard_4dgs"
+    require_renderer_geometry = _env_flag("QUERY_REQUIRE_RENDERER_GEOMETRY", False) and not standard_final
+    renderer_geometry = None if standard_final else load_renderer_geometry_cache(entitybank_dir / "renderer_geometry")
     if require_renderer_geometry and renderer_geometry is None:
         raise FileNotFoundError(
             "QUERY_REQUIRE_RENDERER_GEOMETRY=1 but entitybank/renderer_geometry is unavailable. "
@@ -1467,7 +1484,10 @@ def _load_entity_clouds(run_dir: Path, selected_items: list[dict[str, Any]]) -> 
         gaussian_ids = _selected_item_gaussian_ids(entity_map, item)
         if gaussian_ids.size == 0:
             continue
-        gaussian_ids = gaussian_ids[(gaussian_ids >= 0) & (gaussian_ids < trajectories.shape[0])]
+        valid_ids = (gaussian_ids >= 0) & (gaussian_ids < trajectories.shape[0])
+        if standard_final and not np.all(valid_ids):
+            raise ValueError("Selected Gaussian IDs do not match the checkpoint trajectory bank")
+        gaussian_ids = gaussian_ids[valid_ids]
         gaussian_ids = np.unique(gaussian_ids)
         if gaussian_ids.size == 0:
             continue
@@ -2301,6 +2321,11 @@ def render_hypernerf_query_video(
                 "entity_active": False,
             })
         validation_data = {
+            "semantic_renderer": {
+                "contract": RENDERER_CONTRACT,
+                "rendered": False,
+                "empty_selection": True,
+            } if _is_formal_boundary_gated_profile(resolved_eval_profile) else None,
             "query": selection_payload.get("query", "query"),
             "selection_mode": selection_payload.get("selection_mode", "qwen_plan_empty"),
             "selection_status": selection_status,
@@ -2363,6 +2388,8 @@ def render_hypernerf_query_video(
         entity_id = int(item["id"])
         track = tracks.get(entity_id)
         if track is None:
+            if _is_formal_boundary_gated_profile(resolved_eval_profile):
+                raise ValueError(f"Selected entity {entity_id} has no semantic track")
             continue
         phrase_hints = entity_phrase_hints.get(entity_id, [])
         if not phrase_hints:
@@ -2400,6 +2427,13 @@ def render_hypernerf_query_video(
             )
     if not role_entries:
         raise ValueError("Selected entities could not be matched to target semantic tracks")
+
+    native_renderer = None
+    if _is_formal_boundary_gated_profile(resolved_eval_profile):
+        from .standard_renderer import Standard4DGSSemanticRenderer
+        native_renderer = Standard4DGSSemanticRenderer(run_dir, dataset_dir)
+        if any(entry.get("cloud") is None for entry in role_entries):
+            raise ValueError("Every selected entity must retain its checkpoint Gaussian IDs")
 
     frame_count = len(render_files)
     for entry in role_entries:
@@ -2547,27 +2581,36 @@ def render_hypernerf_query_video(
                     entry.get("query_track"),
                     float(time_value),
                     strict=strict_stage1_match,
+                    image_id=str(image_id) if native_renderer is not None else None,
                 )
                 query_track_mask = _resize_mask_to_shape(query_track_mask, (overlay.size[1], overlay.size[0]))
                 query_track_bbox = _entity_mask_bbox(query_track_mask) if query_track_mask is not None else None
                 if query_track_mask is not None:
                     lifecycle_stage1_union |= np.asarray(query_track_mask, dtype=bool)
                 if entry.get("cloud") is not None:
-                    cloud_mask, cloud_bbox = _project_entity_cloud_mask(
-                        camera,
-                        overlay.size,
-                        entry["cloud"],
-                        float(time_value),
-                        image_id=str(image_id),
-                        eval_profile=resolved_eval_profile,
-                        stage1_boundary_available=query_track_mask is not None,
-                    )
+                    if native_renderer is not None:
+                        cloud_mask = native_renderer.mask(
+                            entry["cloud"].gaussian_ids, str(image_id), float(time_value), overlay.size,
+                            relative_threshold=_env_float("GS_QUERY_ALPHA_REL_THRESHOLD", 0.18),
+                            absolute_threshold=_env_float("GS_QUERY_ALPHA_ABS_THRESHOLD", 0.015),
+                        )
+                        cloud_bbox = _entity_mask_bbox(cloud_mask)
+                    else:
+                        cloud_mask, cloud_bbox = _project_entity_cloud_mask(
+                            camera,
+                            overlay.size,
+                            entry["cloud"],
+                            float(time_value),
+                            image_id=str(image_id),
+                            eval_profile=resolved_eval_profile,
+                            stage1_boundary_available=query_track_mask is not None,
+                        )
                     if cloud_mask is not None:
                         lifecycle_cloud_union |= np.asarray(cloud_mask, dtype=bool)
                         # Renderer-consistent geometry is the authoritative
                         # visibility test for this projection.  The legacy
                         # entitybank centroid is retained only for overlays.
-                        if entry["cloud"].renderer_geometry is not None:
+                        if native_renderer is not None or entry["cloud"].renderer_geometry is not None:
                             visible = True
                             displayable = True
                             in_bounds = True
@@ -2593,25 +2636,30 @@ def render_hypernerf_query_video(
                     "query_track_area_fraction": _mask_area_fraction(query_track_mask),
                     "cloud_mask_area_fraction": _mask_area_fraction(cloud_mask),
                     "cloud_projection_mode": os.environ.get("GS_QUERY_CLOUD_RENDER_MODE", "point_hull"),
-                    "cloud_opacity_source": None if entry.get("cloud") is None else entry["cloud"].opacity_source,
+                    "cloud_opacity_source": (
+                        "exact_time_deformed_checkpoint" if native_renderer is not None
+                        else None if entry.get("cloud") is None else entry["cloud"].opacity_source
+                    ),
                     "cloud_alpha_relative_threshold": (
+                        _env_float("GS_QUERY_ALPHA_REL_THRESHOLD", 0.18) if native_renderer is not None else
                         None
                         if entry.get("cloud") is None
                         else entry["cloud"].alpha_relative_threshold
                     ),
                     "cloud_alpha_absolute_threshold": (
+                        _env_float("GS_QUERY_ALPHA_ABS_THRESHOLD", 0.015) if native_renderer is not None else
                         None
                         if entry.get("cloud") is None
                         else entry["cloud"].alpha_absolute_threshold
                     ),
                     "cloud_alpha_sigma_scale": (
                         None
-                        if entry.get("cloud") is None
+                        if native_renderer is not None or entry.get("cloud") is None
                         else entry["cloud"].alpha_sigma_scale
                     ),
                     "cloud_alpha_max_splat_radius": (
                         None
-                        if entry.get("cloud") is None
+                        if native_renderer is not None or entry.get("cloud") is None
                         else entry["cloud"].alpha_max_splat_radius
                     ),
                     "support_score": float(entry["support_score"][frame_index]),
@@ -2647,6 +2695,8 @@ def render_hypernerf_query_video(
                     role_record["query_track_bbox_xyxy"] = aligned_query_bbox
                 if fused_mask is not None and fused_bbox is not None:
                     fused_binary = np.asarray(fused_mask, dtype=bool)
+                    if native_renderer is not None and np.any(fused_binary & ~np.asarray(cloud_mask, dtype=bool)):
+                        raise RuntimeError("Boundary gating created pixels outside standard 4DGS projection")
                     previous_role_masks[int(entry["entity_id"])] = fused_binary
                     role_record["fusion_prev_iou"] = _mask_iou(previous_mask, fused_mask)
                     role_record["fused_mask_area_fraction"] = _mask_area_fraction(fused_binary)
@@ -2857,6 +2907,12 @@ def render_hypernerf_query_video(
         required=require_synchronized_boundaries,
     )
     payload = {
+        "semantic_renderer": None if native_renderer is None else native_renderer.provenance(),
+        "effective_render_settings": {
+            key: value for key, value in sorted(os.environ.items())
+            if key.startswith("GS_QUERY_") or key == "QUERY_REQUIRE_RENDERER_GEOMETRY"
+        },
+
         "schema_version": 1,
         "query": selection_payload.get("query", "query"),
         "selection_status": selection_status,

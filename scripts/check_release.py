@@ -68,6 +68,11 @@ FORBIDDEN_ARTIFACT_DIRS = {
     "reproducibility", "experiments", "server_sync", "backups", "tmp",
 }
 REQUIRED_RUNTIME_FILES = (
+    "refergaussian/dataset_contract.py",
+    "refergaussian/prediction_contract.py",
+    "refergaussian/semantics/standard_renderer.py",
+    "refergaussian/semantics/render_profile.py",
+    "scripts/prepare_dynerf.py",
     "configs/benchmarks/release_protocols.json",
     "configs/benchmarks/r4d_query_text_en.json",
     "docs/METRICS.md",

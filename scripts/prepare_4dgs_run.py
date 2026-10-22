@@ -25,7 +25,9 @@ def main() -> None:
     # query workers first encounter the same scene; never expose partial banks.
     import fcntl
     from refergaussian.entitybank.tube_bank import prepare_scene_bank
-    lock_path = args.run_dir / ".scene_bank.lock"
+    from refergaussian.dataset_contract import writable_path
+    writable_path(args.run_dir / "entitybank")
+    lock_path = writable_path(args.run_dir / ".scene_bank.lock")
     with lock_path.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         print(prepare_scene_bank(args.run_dir, args.num_frames, args.chunk_size))

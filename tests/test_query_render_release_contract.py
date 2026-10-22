@@ -109,7 +109,7 @@ class QueryRenderReleaseContractTest(unittest.TestCase):
             self.assertEqual(os.environ["GS_QUERY_ALLOW_STALE_STAGE1_BOUNDARY"], "0")
             self.assertEqual(os.environ["GS_QUERY_REQUIRE_SYNCHRONIZED_STAGE1_BOUNDARY"], "1")
             self.assertEqual(os.environ["GS_QUERY_ALLOW_DIRECT_2D_MASKS"], "0")
-            self.assertEqual(os.environ["GS_QUERY_CLOUD_RENDER_MODE"], "gaussian_alpha")
+            self.assertEqual(os.environ["GS_QUERY_CLOUD_RENDER_MODE"], "standard_4dgs")
 
     def test_v5_numeric_profile_only_disables_qualitative_exports(self) -> None:
         profiles = (Path(__file__).resolve().parents[1] / "scripts" / "query_eval_profiles.sh").read_text(

@@ -137,6 +137,7 @@ def _public_plan(args: argparse.Namespace, output: Path) -> BenchmarkPlan:
                 scene,
                 "--category",
                 "temporal_state_reference",
+                "--require-standard-renderer",
                 "--require-complete",
                 "--output-json",
                 scene_result,
@@ -259,6 +260,7 @@ def _r4d_plan(args: argparse.Namespace, output: Path) -> BenchmarkPlan:
     commands.append(
         _python(
             "evaluate_ours_benchmark.py",
+            "--require-standard-renderer",
             "--benchmark",
             benchmark,
             "--query-root-map",

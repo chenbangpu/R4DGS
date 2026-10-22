@@ -14,6 +14,7 @@ for candidate in (REPO_ROOT, EXTERNAL_ROOT):
     if candidate_str not in sys.path:
         sys.path.insert(0, candidate_str)
 
+from refergaussian.dataset_contract import dynerf_time_values
 from refergaussian.semantics.query_render import render_hypernerf_query_video
 
 
@@ -71,7 +72,7 @@ def _resolve_test_times(run_dir: Path) -> np.ndarray:
         n = len(render_files)
         if n <= 1:
             return np.zeros((n,), dtype=np.float32)
-        return np.linspace(0.0, 1.0, num=n, dtype=np.float32)
+        return dynerf_time_values(n)
 
     # Fallback: use all frames from the dataset directory
     if dataset_dir and dataset_dir.exists():
@@ -82,7 +83,7 @@ def _resolve_test_times(run_dir: Path) -> np.ndarray:
             n = len(image_files)
             if n <= 1:
                 return np.zeros((n,), dtype=np.float32)
-            return np.linspace(0.0, 1.0, num=n, dtype=np.float32)
+            return dynerf_time_values(n)
 
     raise FileNotFoundError(
         f"Cannot resolve test times for run_dir={run_dir}. "

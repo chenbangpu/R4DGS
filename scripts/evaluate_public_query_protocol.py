@@ -3,6 +3,9 @@ import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from refergaussian.prediction_contract import validate_standard_prediction
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -536,6 +539,7 @@ def main() -> None:
         help="Optional JSONL manifest. Only protocol queries listed by query_id are evaluated.",
     )
     parser.add_argument("--skip-missing", action="store_true")
+    parser.add_argument("--require-standard-renderer", action="store_true", help="Reject legacy projection outputs")
     parser.add_argument(
         "--require-complete",
         action="store_true",
@@ -597,6 +601,8 @@ def main() -> None:
                 continue
             raise FileNotFoundError(f"Missing validation for {query_slug}: {validation_path}")
         validation_payload = _read_json(validation_path)
+        if args.require_standard_renderer:
+            validate_standard_prediction(validation_payload)
         validation_payload["_validation_path"] = str(validation_path)
         result = evaluate_query(
             query_item=query_item,

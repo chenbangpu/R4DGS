@@ -259,6 +259,11 @@ run_export_renderer_geometry_support() {
 }
 
 run_export_renderer_geometry_final() {
+  # Final standard rendering evaluates the full scene on demand. It needs no
+  # selected-only, all-frame geometry cache (which also loses occluders).
+  if [[ "${GS_QUERY_CLOUD_RENDER_MODE:-}" == "standard_4dgs" ]]; then
+    return 0
+  fi
   if [[ "${QUERY_USE_RENDERER_GEOMETRY:-0}" != "1" ]]; then
     return 0
   fi

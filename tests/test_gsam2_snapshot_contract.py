@@ -93,7 +93,7 @@ class GroundedSamSnapshotContractTest(unittest.TestCase):
         disabled = subprocess.check_output(["bash", "-lc", command], text=True)
         self.assertEqual(disabled, "")
 
-    def test_formal_r4d_profile_enables_only_the_declared_group_fast_path(self) -> None:
+    def test_formal_r4d_profile_runs_qwen_for_declared_groups(self) -> None:
         profiles = ROOT / "scripts" / "query_eval_profiles.sh"
         command = (
             f"source {profiles}; "
@@ -101,7 +101,7 @@ class GroundedSamSnapshotContractTest(unittest.TestCase):
             "printf '%s' \"${QUERY_AUTO_SKIP_QWEN_FOR_DECLARED_MULTIHYPOTHESIS:-}\""
         )
         enabled = subprocess.check_output(["bash", "-lc", command], text=True)
-        self.assertEqual(enabled, "1")
+        self.assertEqual(enabled, "0")
 
         command = (
             f"source {profiles}; "

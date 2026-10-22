@@ -22,7 +22,7 @@ from typing import Any, Iterable
 import numpy as np
 
 
-GEOMETRY_SCHEMA_VERSION = 2
+GEOMETRY_SCHEMA_VERSION = 3
 GEOMETRY_MANIFEST_NAME = "geometry_manifest.json"
 
 
@@ -101,8 +101,8 @@ class RendererProjectionCamera:
         width, height = (int(self.image_size[0]), int(self.image_size[1]))
         pixels = np.stack(
             [
-                (ndc[:, 0] + 1.0) * (0.5 * float(width)),
-                (ndc[:, 1] + 1.0) * (0.5 * float(height)),
+                ((ndc[:, 0] + 1.0) * float(width) - 1.0) * 0.5,
+                ((ndc[:, 1] + 1.0) * float(height) - 1.0) * 0.5,
             ],
             axis=1,
         )
@@ -385,7 +385,6 @@ def _load_renderer_runtime(run_dir: Path) -> tuple[Any, Any, Any, Any, int]:
     from arguments import ModelHiddenParams, ModelParams, PipelineParams
     from refergaussian.checkpoint import saved_model_args, latest_iteration_dir
     from gaussian_renderer import GaussianModel
-    from scene import Scene
 
     parser = argparse.ArgumentParser(description="ReferGaussian renderer geometry")
     model = ModelParams(parser)
@@ -395,8 +394,12 @@ def _load_renderer_runtime(run_dir: Path) -> tuple[Any, Any, Any, Any, int]:
 
     gaussians = GaussianModel(args.sh_degree, hidden.extract(args))
     iteration = int(latest_iteration_dir(run_dir).name[10:])
-    scene = Scene(model.extract(args), gaussians, load_iteration=iteration, shuffle=False)
-    return args, gaussians, None, scene, int(scene.loaded_iter)
+    # The checkpoint includes the HexPlane AABB. Avoid Scene's dataset writes.
+    checkpoint_dir = latest_iteration_dir(run_dir)
+    gaussians.load_ply(str(checkpoint_dir / "point_cloud.ply"))
+    gaussians.load_model(str(checkpoint_dir))
+    gaussians._deformation.eval()
+    return args, gaussians, None, None, iteration
 
 
 def _renderer_state_at_time(
@@ -473,6 +476,10 @@ def _renderer_projection_metadata(
         raise FileNotFoundError(
             f"Renderer-consistent semantic projection cannot find source image {image_path}"
         )
+    if (dataset_dir / "poses_bounds.npy").is_file():
+        from refergaussian.dataset_contract import DYNERF_CAMERA_CONTRACT
+        if _read_json(camera_path).get("refergaussian_camera_contract") != DYNERF_CAMERA_CONTRACT:
+            raise ValueError(f"Stale DyNeRF camera convention: {camera_path}; regenerate camera JSONs")
     source_camera = SourceCamera.from_json(camera_path)
     with Image.open(image_path) as image:
         image_width, image_height = (int(image.size[0]), int(image.size[1]))

@@ -11,7 +11,7 @@ The supported path contains:
 1. Refer-Planner query decomposition;
 2. Grounded-SAM2 multi-frame mask evidence;
 3. training-free mask-supported Gaussian entity lifting;
-4. EntityBank selection and Gaussian-only mask rendering;
+4. EntityBank selection and boundary-gated standard 4DGS mask rendering;
 5. strict time-sensitive Public and R4D-Bench-QA evaluators.
 
 The repository intentionally excludes custom reconstruction code, scene-quality
@@ -75,7 +75,7 @@ Formal runs must:
 2. run `scripts/preflight_query_batch.py --strict-release`;
 3. use one serial worker per GPU;
 4. preserve `batch_provenance.json` and every query validation record;
-5. evaluate with `--require-complete`;
+5. evaluate with `--require-complete --require-standard-renderer`;
 6. write all new outputs to a new, untracked directory.
 
 Missing queries, unresolved selections, missing masks, or source-camera
@@ -97,3 +97,29 @@ videos. `scripts/check_release.py` independently rejects those artifact types
 if they are accidentally staged.
 
 Metric formulas and aggregation rules are defined in [METRICS.md](METRICS.md).
+
+## Final mask contract (2026-10-22)
+
+Formal predictions carry `upstream_4dgs_full_scene_semantic_v1`. The pinned
+GaussianRasterizer receives the complete deformed scene and binary entity
+membership as precomputed RGB, with SH disabled for this semantic pass.
+Non-selected Gaussians retain their opacity and participate in occlusion.
+Thresholded projections are clipped by synchronized Stage-1 boundary masks;
+cleanup may remove pixels but cannot add pixels outside Gaussian support.
+This is a boundary-gated method and requires Stage-1 evidence in the evaluated
+view. It is not a claim of segmentation independent of target-view 2D evidence.
+
+Both benchmarks evaluate deformation at the source-frame time. The 64-sample
+scene bank is only for entity search and motion summaries. Final rendering uses
+no selected-only all-frame geometry cache. Shell and Python rendering consume
+the same formal profile, and validation records its effective render settings
+and checkpoint identity. `run_benchmark.py` passes `--require-standard-renderer`
+to the evaluators so older approximate outputs cannot enter a new formal report.
+Explicitly resolved semantic-empty queries are the only no-entity exception.
+
+DyNeRF preparation uses cam00, 300 frames at 1352x1014, source IDs `0000` through
+`0299`, upstream LLFF axis conversion and timestamps `i/300`. Rebuild older
+camera metadata and use fresh query output directories after updating.
+
+The metric formulas and query sets are unchanged. The rendered predictions
+have changed and require fresh GPU evaluation before comparison to paper scores.

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from refergaussian.dataset_contract import dynerf_time_values
 from PIL import Image, ImageFilter, ImageOps
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -307,7 +308,7 @@ def _test_time_values(run_dir: Path) -> np.ndarray:
         gt_files = sorted(gt_candidates[-1].glob("*.png"))
         if len(gt_files) <= 1:
             return np.zeros((len(gt_files),), dtype=np.float32)
-        return np.linspace(0.0, 1.0, num=len(gt_files), dtype=np.float32)
+        return dynerf_time_values(len(gt_files))
 
     entries = resolve_dataset_image_entries(source_path)
     return np.asarray([float(entry["time_value"]) for entry in entries], dtype=np.float32)

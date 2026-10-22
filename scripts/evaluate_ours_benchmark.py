@@ -27,6 +27,9 @@ import os
 import struct
 import zlib
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from refergaussian.prediction_contract import validate_standard_prediction
 
 import numpy as np
 from PIL import Image
@@ -974,6 +977,7 @@ def main() -> None:
     )
     parser.add_argument("--skip-missing", action="store_true",
                         help="Skip queries with missing validation (don't fail)")
+    parser.add_argument("--require-standard-renderer", action="store_true", help="Reject legacy projection outputs")
     parser.add_argument(
         "--require-complete",
         action="store_true",
@@ -1021,6 +1025,8 @@ def main() -> None:
             continue
 
         query_output_dir = Path(query_output_dir_str)
+        if args.require_standard_renderer:
+            validate_standard_prediction(_read_json(query_output_dir / "final_query_render_sourcebg" / "validation.json"))
         dataset_dir_str = dataset_dir_map.get(query_id) or dataset_dir_map.get(
             "_".join(query_id.split("_")[:-1])
         )

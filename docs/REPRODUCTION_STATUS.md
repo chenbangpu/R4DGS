@@ -1,6 +1,36 @@
 # R4DGS Reproduction Status
 
-Updated: 2026-10-13
+Updated: 2026-10-22
+
+## Standard-renderer and pipeline correction
+
+The corrected final path retains synchronized Stage-1 boundary gating. It now
+renders binary entity membership through the pinned upstream GaussianRasterizer
+with the full scene, including non-selected occluders, at each exact source
+camera/time. The old additive selected-cloud projection is not used for formal
+final masks. Lifting still uses approximate splat scores for candidate selection.
+
+Both benchmarks and standalone re-rendering load the same render settings.
+Stage-1 runs on every source frame and boundary gates require matching image IDs.
+Formal evaluation rejects earlier prediction contracts. DyNeRF camera axes,
+300-frame time normalization and source image IDs now match the pinned loader.
+The README includes frame extraction, COLMAP point-cloud preparation and all
+training commands. Dataset download arguments are compatible with the pinned
+Hugging Face Hub version; extension architectures are detected from visible GPUs.
+
+Validation completed on 2026-10-22 with Linux / Python 3.10 and CUDA hidden:
+
+- `python -m unittest discover -s tests -v`: 209 tests passed.
+- `python scripts/check_release.py` and `bash -n` for every shell script: passed.
+- Both benchmark `--dry-run` commands and DyNeRF preparation `--help`: passed.
+
+CPU checks cover adapter inputs against an analytic occlusion oracle, exact
+frame times, camera algebra, configuration parity, boundary support, and final
+mask export/validation using a renderer double. They do not execute or validate
+the CUDA rasterizer binary. Fresh model loading,
+COLMAP preparation and complete 9-query/89-query GPU reruns remain pending.
+Use new result directories and regenerate old DyNeRF camera JSONs. Neither old
+reports nor the paper tables establish the accuracy of this corrected renderer.
 
 ## Standard-checkpoint correction
 

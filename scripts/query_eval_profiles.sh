@@ -588,7 +588,7 @@ apply_query_eval_profile() {
       export GSAM2_INSTANCE_MAX_CANDIDATES=2
       export GSAM2_INSTANCE_RESOLUTION_POLICY=multi_hypothesis
       export GSAM2_INSTANCE_FULL_SEQUENCE_TRACKS=1
-      export QUERY_AUTO_SKIP_QWEN_FOR_DECLARED_MULTIHYPOTHESIS=1
+      export QUERY_AUTO_SKIP_QWEN_FOR_DECLARED_MULTIHYPOTHESIS=0
       ;;
     r4d_multi_instance_boundary_v6)
       apply_query_eval_profile r4d_boundary_gated_v5
@@ -642,6 +642,17 @@ apply_query_eval_profile() {
     *)
       echo "[error] unknown QUERY_EVAL_PROFILE='${profile}' (expected: default, viou_boost_v1, boundary_refine_v1, boundary_shape_v2, public_time_shape_v3, public_time_shape_v4_recall, public_time_boundary_gated_v5, r4d_shape_v4_recall, r4d_boundary_gated_v5, r4d_multi_instance_boundary_v6, r4d_renderer_geometry_v7, r4d_renderer_consistent)" >&2
       return 2
+      ;;
+  esac
+  case "${profile}" in
+    public_time_boundary_gated_v5|boundary_gated_gaussian_v5|public_time_boundary_gated_v5_numeric|boundary_gated_gaussian_v5_numeric|r4d_boundary_gated_v5|r4d_multi_instance_boundary_v6|r4d_renderer_geometry_v7|r4d_renderer_consistent)
+      # Shared final-output contract for both released benchmarks.
+      export GSAM2_FRAME_SUBSAMPLE_STRIDE=1
+      export QUERY_USE_RENDERER_GEOMETRY=1
+      export QUERY_REQUIRE_RENDERER_GEOMETRY=1
+      export GS_QUERY_CLOUD_RENDER_MODE=standard_4dgs
+      export GS_QUERY_FUSE_ALLOW_QUERY_SUPPORTED_BY_CLOUD=0
+      export GS_QUERY_CLOUD_BOX_EXPANSION=0
       ;;
   esac
 }

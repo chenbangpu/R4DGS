@@ -66,7 +66,7 @@ class RendererGeometryCacheTest(unittest.TestCase):
             pixels = camera.project(np.asarray([[-1.0, -1.0, 1.0], [1.0, 1.0, 1.0]], dtype=np.float32))
             local = camera.points_to_local_points(np.asarray([[0.0, 0.0, 2.0]], dtype=np.float32))
 
-        self.assertTrue(np.allclose(pixels, np.asarray([[0.0, 0.0], [100.0, 80.0]], dtype=np.float32)))
+        self.assertTrue(np.allclose(pixels, np.asarray([[-0.5, -0.5], [99.5, 79.5]], dtype=np.float32)))
         self.assertTrue(np.allclose(local, np.asarray([[0.0, 0.0, 2.0]], dtype=np.float32)))
 
     def test_missing_id_and_frame_are_hard_errors(self) -> None:

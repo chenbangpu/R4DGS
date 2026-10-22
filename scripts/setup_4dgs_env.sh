@@ -126,7 +126,9 @@ install_cuda121_profile() {
   export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/lib:${LD_LIBRARY_PATH:-}"
   export OMP_NUM_THREADS=1
   export MAX_JOBS="${GS4D_MAX_JOBS:-4}"
-  export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.9}"
+  # Let PyTorch detect visible GPU architectures unless the user overrides them.
+  # An empty value uses PyTorch's native detection, including forward-compatible PTX.
+  export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-}"
   ensure_cuda_headers "${CUDA_HOME}"
 
   pip_run "${env_prefix}" install --upgrade pip "setuptools<81" wheel ninja "numpy<2"

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from refergaussian.dataset_contract import dynerf_time_values
 from PIL import Image
 
 from .native_assignment import export_native_semantic_assignments
@@ -301,7 +302,7 @@ def _load_source_images(run_dir: Path) -> tuple[Path, list[str], np.ndarray]:
         if len(test_ids) <= 1:
             test_times = np.zeros((len(test_ids),), dtype=np.float32)
         else:
-            test_times = np.linspace(0.0, 1.0, num=len(test_ids), dtype=np.float32)
+            test_times = dynerf_time_values(len(test_ids))
         return gt_dir, test_ids, test_times
 
     entries = resolve_dataset_image_entries(source_path)

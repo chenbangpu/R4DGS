@@ -15,8 +15,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from refergaussian.dataset_contract import dynerf_camera_rotation, writable_path, DYNERF_CAMERA_CONTRACT
 
 
 def load_llff_poses(dataset_dir: Path) -> tuple[np.ndarray, float, float, float]:
@@ -35,41 +39,19 @@ def llff_c2w_to_nerfies_camera(
     actual_H: int,
     actual_W: int,
 ) -> dict:
-    """
-    Convert LLFF c2w matrix to nerfies/HyperNeRF Camera JSON format.
+    """Convert raw LLFF pose using exactly the pinned 4DGS axis convention."""
+    R_c2w = dynerf_camera_rotation(c2w_raw)
+    C = c2w_raw[:3, 3].astype(float)
+    R_w2c = R_c2w.T
 
-    LLFF convention (raw, before neural_3D rearrangement):
-      c2w[:, 0] = right  (x+ in camera, in world)
-      c2w[:, 1] = down   (y+ in image space, in world)
-      c2w[:, 2] = forward (z+ into the scene, in world)  -- actually -z in OpenGL but +z in OpenCV
-      c2w[:, 3] = camera center in world
-
-    nerfies Camera convention (HyperNeRF):
-      orientation = R_w2c  (world-to-camera, so rows are camera axes expressed as world-to-camera)
-      position = C  (camera center in world)
-      focal_length: in pixels (matching actual_W)
-      principal_point: [cx, cy] in pixels
-      image_size: [W, H] actual image size used by pipeline
-    """
-    # Camera-to-world rotation: columns are [right, down, forward] in world space
-    R_c2w = c2w_raw[:3, :3].astype(float)  # (3, 3)
-    C = c2w_raw[:3, 3].astype(float)       # (3,) camera center in world
-
-    # World-to-camera rotation (orientation)
-    # orientation[i, :] = i-th camera axis expressed as world-to-camera row
-    # = R_c2w.T since R_c2w is orthogonal
-    R_w2c = R_c2w.T  # (3, 3)
-
-    # Scale focal length if actual image size differs from poses metadata size
-    # poses H, W correspond to the full-res images
-    scale_x = actual_W / max(W, 1.0)
-    scale_y = actual_H / max(H, 1.0)
-    focal_scaled_x = focal * scale_x
+    # Pinned upstream uses 2704 / image_width, independently of metadata W.
+    focal_scaled_x = focal / (2704.0 / actual_W)
     # Principal point: assume image center
     cx = actual_W / 2.0
     cy = actual_H / 2.0
 
     camera_json = {
+        "refergaussian_camera_contract": DYNERF_CAMERA_CONTRACT,
         "orientation": R_w2c.tolist(),
         "position": C.tolist(),
         "focal_length": float(focal_scaled_x),
@@ -108,28 +90,17 @@ def generate_camera_jsons(
     dry_run: bool = False,
 ) -> None:
     """Generate camera/XXXX.json files for a dynerf dataset."""
-    dataset_dir = Path(dataset_dir)
+    dataset_dir = Path(dataset_dir).resolve() if dry_run else writable_path(dataset_dir)
 
     if not (dataset_dir / "poses_bounds.npy").exists():
         raise FileNotFoundError(f"poses_bounds.npy not found in {dataset_dir}")
 
-    # Find preferred camera
-    cam_candidates = sorted([d.name for d in dataset_dir.glob("cam*") if d.is_dir()])
-    if not cam_candidates:
-        raise FileNotFoundError(f"No cam* directories found in {dataset_dir}")
-    # Prefer cam00
-    cam_name = "cam00" if "cam00" in cam_candidates else cam_candidates[0]
-    print(f"Using camera: {cam_name}")
-
-    # Load poses
     poses, H_meta, W_meta, focal_meta = load_llff_poses(dataset_dir)
-    N_cams = poses.shape[0]
-    print(f"N cameras in poses_bounds: {N_cams}")
-    print(f"Metadata: H={H_meta:.0f}, W={W_meta:.0f}, focal={focal_meta:.2f}")
-
-    if cam_index >= N_cams:
-        print(f"[warn] cam_index={cam_index} >= N_cams={N_cams}, using 0")
-        cam_index = 0
+    if cam_index != 0:
+        raise ValueError("The released DyNeRF protocol evaluates cam00; --cam-index must be 0")
+    cam_name = "cam00"
+    if not (dataset_dir / cam_name / "images").is_dir():
+        raise FileNotFoundError("Extract frames first with scripts/prepare_dynerf.py")
 
     # Get the c2w for the selected camera
     c2w_raw = poses[cam_index, :, :4]  # (3, 4)
@@ -151,12 +122,15 @@ def generate_camera_jsons(
     # Output directory
     camera_dir = dataset_dir / "camera"
     if not dry_run:
+        writable_path(camera_dir)
+    if not dry_run:
         camera_dir.mkdir(exist_ok=True)
 
     # Write one JSON per frame (all identical since camera doesn't move for monocular video)
     for frame_id in frame_ids:
         out_path = camera_dir / f"{frame_id}.json"
         if not dry_run:
+            writable_path(out_path)
             with open(out_path, "w", encoding="utf-8") as f:
                 json.dump(camera_json, f, indent=2)
 
