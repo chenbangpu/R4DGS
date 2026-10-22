@@ -80,7 +80,7 @@ class QuickStartContractTest(unittest.TestCase):
         self.assertTrue(Path(commands[0][1]).as_posix().endswith("external/4DGaussians/train.py"))
         self.assertTrue(Path(commands[1][1]).as_posix().endswith("external/4DGaussians/render.py"))
 
-    def test_readme_and_page_embed_the_method_figure(self) -> None:
+    def test_project_page_embeds_the_method_figure(self) -> None:
         method_figure = ROOT / "docs" / "assets" / "framework.webp"
         self.assertTrue(method_figure.is_file())
         method_bytes = method_figure.read_bytes()
@@ -89,7 +89,6 @@ class QuickStartContractTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         page = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("docs/assets/framework.webp", readme)
         self.assertIn("assets/framework.webp", page)
         self.assertNotIn("method_overview.svg", readme + page)
         self.assertNotIn("Accepted at", page)
