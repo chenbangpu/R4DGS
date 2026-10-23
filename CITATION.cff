@@ -19,8 +19,8 @@ authors:
     given-names: "Hongbo"
   - family-names: "Ding"
     given-names: "Jiayu"
-repository-code: "https://github.com/Trump0412/R4DGS"
-url: "https://trump0412.github.io/R4DGS/"
+repository-code: "https://github.com/chenbangpu/R4DGS"
+url: "https://chenbangpu.github.io/R4DGS/"
 license: "MIT"
 abstract: >-
   ReferGaussian performs training-free referring inference over frozen 4D
@@ -55,3 +55,4 @@ preferred-citation:
     name: "Proceedings of the 34th ACM International Conference on Multimedia"
   year: 2026
   doi: "10.1145/3767308.3836021"
+  url: "https://arxiv.org/abs/2610.30326"

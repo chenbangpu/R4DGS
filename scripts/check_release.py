@@ -204,8 +204,9 @@ def check_public_metadata() -> list[str]:
     errors: list[str] = []
     expected_title = "R4DGS: Referring Segmentation in 4D Gaussian Splatting"
     expected_doi = "10.1145/3767308.3836021"
-    expected_repository = "https://github.com/Trump0412/R4DGS"
-    expected_page = "https://trump0412.github.io/R4DGS/"
+    expected_repository = "https://github.com/chenbangpu/R4DGS"
+    expected_page = "https://chenbangpu.github.io/R4DGS/"
+    expected_paper = "https://arxiv.org/abs/2610.30326"
     for relative in ("README.md", "CITATION.cff", "docs/index.html"):
         text = (ROOT / relative).read_text(encoding="utf-8")
         if expected_title not in text:
@@ -214,6 +215,8 @@ def check_public_metadata() -> list[str]:
             errors.append(f"Camera-ready DOI is missing from {relative}")
         if expected_repository not in text:
             errors.append(f"Renamed repository URL is missing from {relative}")
+        if expected_paper not in text:
+            errors.append(f"Paper URL is missing from {relative}")
         if "Chu Liuxin" in text:
             errors.append(f"Camera-ready author order must be 'Liuxin Chu' in {relative}")
     for relative in ("README.md", "CITATION.cff"):

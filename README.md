@@ -6,7 +6,7 @@
 [![Python 3.10](https://img.shields.io/badge/Python-3.10-brightgreen.svg)](#quick-start)
 [![ACM MM 2026](https://img.shields.io/badge/ACM%20MM-2026-8A2BE2.svg)](#citation)
 
-[Project Page](https://trump0412.github.io/R4DGS/) | [Paper](https://doi.org/10.1145/3767308.3836021) | [R4D-Bench-QA](https://huggingface.co/datasets/LiYacheng/r4d-bench-qa) | [Citation](#citation)
+[Project Page](https://chenbangpu.github.io/R4DGS/) | [Paper](https://arxiv.org/abs/2610.30326) | [R4D-Bench-QA](https://huggingface.co/datasets/LiYacheng/r4d-bench-qa) | [Citation](#citation)
 
 **Bangpu Chen, Yaxuan Li, Shirui Peng, Xiangtian Si, Liuxin Chu, Xitong Cao, Hongbo Jin, Jiayu Ding**
 
@@ -45,7 +45,7 @@ Requirements: Linux, Miniconda, NVIDIA GPU, CUDA 12.1, and COLMAP.
 ### 1. Installation
 
 ```bash
-git clone https://github.com/Trump0412/R4DGS.git
+git clone https://github.com/chenbangpu/R4DGS.git
 cd R4DGS
 bash scripts/setup.sh
 source scripts/common.sh
@@ -132,6 +132,7 @@ Use `--gpus 0 1 2 3` for multiple GPUs and `--output reports/<run-name>` to choo
   author    = {Chen, Bangpu and Li, Yaxuan and Peng, Shirui and Si, Xiangtian and Chu, Liuxin and Cao, Xitong and Jin, Hongbo and Ding, Jiayu},
   booktitle = {Proceedings of the 34th ACM International Conference on Multimedia},
   year      = {2026},
-  doi       = {10.1145/3767308.3836021}
+  doi       = {10.1145/3767308.3836021},
+  url       = {https://arxiv.org/abs/2610.30326}
 }
 ```
